@@ -1,7 +1,6 @@
-
 import streamlit as st
 import yfinance as yf
-from google import genai
+from groq import Groq
 from datetime import datetime
 
 st.set_page_config(
@@ -11,13 +10,13 @@ st.set_page_config(
 )
 
 st.title("📈 Weekly Stock Predictions")
-st.caption("TSLA • ACHR • COIN • SPCX | Maximum free version")
+st.caption("TSLA • ACHR • COIN • SPCX | Maximum free version (Groq)")
 
-# --- Configure Gemini (new SDK) ---
+# --- Configure Groq ---
 try:
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 except Exception as e:
-    st.error(f"Could not load Gemini API key: {e}")
+    st.error(f"Could not load Groq API key: {e}")
     st.stop()
 
 stocks = {
@@ -51,8 +50,8 @@ st.divider()
 # --- AI Research Section ---
 st.subheader("Weekly AI Research & Forecast")
 
-if st.button("🔄 Run Weekly Research (uses Gemini)", type="primary"):
-    with st.spinner("Researching all four stocks with Gemini... this may take 30-60 seconds"):
+if st.button("🔄 Run Weekly Research (uses Groq)", type="primary"):
+    with st.spinner("Researching all four stocks... this may take 20-40 seconds"):
         results = {}
 
         for ticker, name in stocks.items():
@@ -78,11 +77,13 @@ Be realistic. Do not claim high certainty. Keep the tone professional and balanc
 """
 
             try:
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt
+                completion = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.4,
+                    max_tokens=600
                 )
-                results[ticker] = response.text
+                results[ticker] = completion.choices[0].message.content
             except Exception as e:
                 results[ticker] = f"**Error:** {type(e).__name__}: {str(e)}"
 
