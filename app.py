@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 from groq import Groq
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import re
 
@@ -39,6 +39,27 @@ def extract_probability(text):
         return int(match.group(1))
     return None
 
+# --- Helper: check 6-month low ---
+def check_6m_low(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        end = datetime.now()
+        start = end - timedelta(days=185)  # \~6 months
+        hist = stock.history(start=start, end=end)
+        
+        if hist.empty:
+            return None, None, False
+        
+        current_price = hist["Close"].iloc[-1]
+        low_6m = hist["Low"].min()
+        
+        # Consider it near the low if within 3% of the 6-month low
+        is_near_low = current_price <= low_6m * 1.03
+        
+        return current_price, low_6m, is_near_low
+    except Exception:
+        return None, None, False
+
 # --- Current Prices ---
 st.subheader("Current Prices")
 cols = st.columns(4)
@@ -50,11 +71,25 @@ for i, (ticker, name) in enumerate(stocks.items()):
             info = stock.info
             price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
             change = info.get("regularMarketChangePercent")
+            
+            # Check 6-month low
+            _, low_6m, is_near_low = check_6m_low(ticker)
+            
             st.metric(
                 label=f"{name} ({ticker})",
                 value=f"${price:.2f}" if price else "N/A",
                 delta=f"{change:.2f}%" if change else None
             )
+            
+            if is_near_low and low_6m is not None:
+                st.markdown(
+                    f"<span style='background-color:#16a34a; color:white; padding:3px 8px; border-radius:6px; font-size:0.8em;'>"
+                    f"Possible Buy · near 6m low (${low_6m:.2f})</span>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.write("")  # keep spacing consistent
+                
         except Exception:
             st.metric(label=f"{name} ({ticker})", value="Error")
 
@@ -103,7 +138,6 @@ Respond in exactly this format:
             except Exception as e:
                 results[ticker] = f"**Error:** {str(e)}"
 
-        # Save to history
         history_entry = {
             "run_time": run_time,
             "results": results
@@ -125,9 +159,8 @@ st.divider()
 st.subheader("Probability Trend (Positive Week)")
 
 if st.session_state["history"]:
-    # Build probability table
     rows = []
-    for entry in reversed(st.session_state["history"]):  # oldest first for trend
+    for entry in reversed(st.session_state["history"]):
         row = {"Run Time": entry["run_time"]}
         for ticker in stocks:
             text = entry["results"].get(ticker, "")
@@ -138,15 +171,12 @@ if st.session_state["history"]:
     df = pd.DataFrame(rows)
     st.dataframe(df, use_container_width=True)
 
-    # Simple line chart
     chart_df = df.set_index("Run Time")
-    # Convert to numeric where possible
     for col in chart_df.columns:
         chart_df[col] = pd.to_numeric(chart_df[col], errors="coerce")
     
     st.line_chart(chart_df)
 
-    # Download
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(
         label="Download Probability History as CSV",
@@ -157,4 +187,4 @@ if st.session_state["history"]:
 else:
     st.info("No history yet. Run the research to start tracking probabilities.")
 
-st.caption("Free personal tool. Not financial advice. History lasts while the app is active — download the CSV to keep it permanently.")
+st.caption("Free personal tool. Not financial advice. 'Possible Buy' appears when price is within 3% of the 6-month low.")
