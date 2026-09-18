@@ -78,7 +78,7 @@ Be realistic. Do not claim high certainty. Keep the tone professional and balanc
 
             try:
                 completion = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                    model="openai/gpt-oss-20b",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.4,
                     max_tokens=600
