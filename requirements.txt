@@ -1,6 +1,6 @@
 streamlit
 yfinance
-google-genai
+groq
 pandas
 requests
 python-dotenv
