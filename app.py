@@ -2,6 +2,8 @@ import streamlit as st
 import yfinance as yf
 from groq import Groq
 from datetime import datetime
+import pandas as pd
+import json
 
 st.set_page_config(
     page_title="Weekly Stock Predictions",
@@ -25,6 +27,10 @@ stocks = {
     "COIN": "Coinbase",
     "SPCX": "SpaceX"
 }
+
+# Initialize history in session state
+if "history" not in st.session_state:
+    st.session_state["history"] = []
 
 # --- Current Prices ---
 st.subheader("Current Prices")
@@ -53,6 +59,7 @@ st.subheader("Weekly AI Research & Forecast")
 if st.button("🔄 Run Weekly Research (uses Groq)", type="primary"):
     with st.spinner("Researching all four stocks... this may take 20-40 seconds"):
         results = {}
+        run_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         for ticker, name in stocks.items():
             prompt = f"""
@@ -90,16 +97,22 @@ Respond in exactly this format (use the headings):
                     model="openai/gpt-oss-20b",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.4,
-                    max_tokens=600
+                    max_tokens=700
                 )
                 results[ticker] = completion.choices[0].message.content
             except Exception as e:
                 results[ticker] = f"**Error:** {type(e).__name__}: {str(e)}"
 
+        # Save this run to history
+        history_entry = {
+            "run_time": run_time,
+            "results": results
+        }
+        st.session_state["history"].insert(0, history_entry)  # newest first
         st.session_state["research_results"] = results
-        st.session_state["research_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        st.session_state["research_time"] = run_time
 
-# Display results
+# Display latest results
 if "research_results" in st.session_state:
     st.success(f"Last research run: {st.session_state['research_time']}")
 
@@ -108,4 +121,42 @@ if "research_results" in st.session_state:
             st.markdown(text)
 
 st.divider()
-st.caption("This is a free personal research tool. Not financial advice.")
+
+# --- History Section ---
+st.subheader("Weekly History")
+
+if st.session_state["history"]:
+    st.write(f"Saved runs: {len(st.session_state['history'])}")
+
+    # Download button
+    history_for_download = []
+    for entry in st.session_state["history"]:
+        for ticker, text in entry["results"].items():
+            history_for_download.append({
+                "Run Time": entry["run_time"],
+                "Ticker": ticker,
+                "Name": stocks[ticker],
+                "Full Research": text
+            })
+
+    df = pd.DataFrame(history_for_download)
+    csv = df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="Download History as CSV",
+        data=csv,
+        file_name=f"stock_research_history_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv"
+    )
+
+    # Show past runs
+    for i, entry in enumerate(st.session_state["history"]):
+        with st.expander(f"Run from {entry['run_time']}", expanded=(i == 0)):
+            for ticker, text in entry["results"].items():
+                st.markdown(f"### {stocks[ticker]} ({ticker})")
+                st.markdown(text)
+                st.divider()
+else:
+    st.info("No history yet. Run the research to start tracking.")
+
+st.caption("This is a free personal research tool. Not financial advice. History is kept while the app is active — download the CSV to keep a permanent record.")
