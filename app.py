@@ -56,24 +56,33 @@ if st.button("🔄 Run Weekly Research (uses Groq)", type="primary"):
 
         for ticker, name in stocks.items():
             prompt = f"""
-You are a financial research assistant. Today is {datetime.now().strftime('%Y-%m-%d')}.
+You are a cautious financial research assistant. Today is {datetime.now().strftime('%Y-%m-%d')}.
 
-Analyze the stock {name} ({ticker}) for the coming week.
+Your task is to produce a realistic weekly outlook for {name} ({ticker}).
 
-Provide a structured response in this exact format:
+Rules you must follow:
+- Be balanced and conservative. Never claim high certainty.
+- Probability of a positive week should normally stay between 45% and 62%.
+- Base your view on typical catalysts that actually move this stock (earnings, product news, regulation, sector trends, macro, company-specific events).
+- If there is no strong catalyst, lean Neutral.
+- Keep every section short and clear.
+
+Respond in exactly this format (use the headings):
 
 **Direction Bias:** Up / Down / Neutral
-**Probability of positive week:** XX%
-**Expected move range:** e.g. -3% to +5%
-**Key catalysts this week:**
-- bullet point 1
-- bullet point 2
-**Main risks:**
-- bullet point 1
-- bullet point 2
-**Short summary:** 2-3 sentences max.
 
-Be realistic. Do not claim high certainty. Keep the tone professional and balanced.
+**Probability of positive week:** XX%
+
+**Expected move range:** e.g. -3% to +4%
+
+**Key catalysts this week:**
+- (1-3 short bullet points only)
+
+**Main risks:**
+- (1-3 short bullet points only)
+
+**Short summary:**
+(2-3 sentences maximum. Be direct and realistic.)
 """
 
             try:
