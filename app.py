@@ -1,8 +1,8 @@
+
 import streamlit as st
 import yfinance as yf
-import google.generativeai as genai
+from google import genai
 from datetime import datetime
-import json
 
 st.set_page_config(
     page_title="Weekly Stock Predictions",
@@ -13,12 +13,11 @@ st.set_page_config(
 st.title("📈 Weekly Stock Predictions")
 st.caption("TSLA • ACHR • COIN • SPCX | Maximum free version")
 
-# --- Configure Gemini ---
+# --- Configure Gemini (new SDK) ---
 try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception as e:
-    st.error("Gemini API key not found or invalid. Please check your Streamlit secrets.")
+    st.error(f"Could not load Gemini API key: {e}")
     st.stop()
 
 stocks = {
@@ -32,8 +31,6 @@ stocks = {
 st.subheader("Current Prices")
 cols = st.columns(4)
 
-current_data = {}
-
 for i, (ticker, name) in enumerate(stocks.items()):
     with cols[i]:
         try:
@@ -41,11 +38,6 @@ for i, (ticker, name) in enumerate(stocks.items()):
             info = stock.info
             price = info.get("regularMarketPrice") or info.get("currentPrice") or info.get("previousClose")
             change = info.get("regularMarketChangePercent")
-            current_data[ticker] = {
-                "name": name,
-                "price": price,
-                "change": change
-            }
             st.metric(
                 label=f"{name} ({ticker})",
                 value=f"${price:.2f}" if price else "N/A",
@@ -53,7 +45,6 @@ for i, (ticker, name) in enumerate(stocks.items()):
             )
         except Exception:
             st.metric(label=f"{name} ({ticker})", value="Error")
-            current_data[ticker] = {"name": name, "price": None, "change": None}
 
 st.divider()
 
@@ -61,7 +52,7 @@ st.divider()
 st.subheader("Weekly AI Research & Forecast")
 
 if st.button("🔄 Run Weekly Research (uses Gemini)", type="primary"):
-    with st.spinner("Researching all four stocks with Gemini... this may take 20-40 seconds"):
+    with st.spinner("Researching all four stocks with Gemini... this may take 30-60 seconds"):
         results = {}
 
         for ticker, name in stocks.items():
@@ -83,20 +74,22 @@ Provide a structured response in this exact format:
 - bullet point 2
 **Short summary:** 2-3 sentences max.
 
-Be realistic. Do not claim high certainty. Base your view on typical factors that move this stock (news, sector trends, company events, macro). Keep the tone professional and balanced.
+Be realistic. Do not claim high certainty. Keep the tone professional and balanced.
 """
 
             try:
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
+                )
                 results[ticker] = response.text
             except Exception as e:
-                results[ticker] = f"Error generating research: {str(e)}"
+                results[ticker] = f"**Error:** {type(e).__name__}: {str(e)}"
 
-        # Store in session state so it stays after the button click
         st.session_state["research_results"] = results
         st.session_state["research_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-# Display results if they exist
+# Display results
 if "research_results" in st.session_state:
     st.success(f"Last research run: {st.session_state['research_time']}")
 
@@ -105,4 +98,4 @@ if "research_results" in st.session_state:
             st.markdown(text)
 
 st.divider()
-st.caption("This is a free personal research tool. Not financial advice. Predictions are probabilistic and can be wrong.")
+st.caption("This is a free personal research tool. Not financial advice.")
